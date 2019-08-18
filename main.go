@@ -232,7 +232,7 @@ func rateMinutes(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"rateminutes": rateMinutes,
+		"rateMinutes": rateMinutes,
 	})
 }
 
@@ -259,7 +259,7 @@ func rateHours(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"ratehours": rateHours,
+		"rateHours": rateHours,
 	})
 }
 
@@ -286,7 +286,7 @@ func rateDays(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"ratedays": rateDays,
+		"rateDays": rateDays,
 	})
 }
 
@@ -302,9 +302,9 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 
-	router.GET("/rateminutes", rateMinutes)
-	router.GET("/ratehours", rateHours)
-	router.GET("/ratedays", rateDays)
+	router.GET("/rateMinutes", rateMinutes)
+	router.GET("/rateHours", rateHours)
+	router.GET("/rateDays", rateDays)
 
 	router.Run(":8000")
 }
