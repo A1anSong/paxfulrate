@@ -3,15 +3,17 @@ package main
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"github.com/tidwall/gjson"
 	"io/ioutil"
-	"math"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	_ "github.com/lib/pq"
 )
 
 var paxfulAPIKey = "yLc8DU65v8EA6WAtA5Esv6ZFRiy0aJbV"
@@ -125,15 +127,82 @@ func getGiftCardUSD() float64 {
 }
 
 func calculatePaxfulrate() {
-	bitcoinPrice := getBitcoinCNY()
-	giftCardPrice := getGiftCardUSD()
-	rate := bitcoinPrice / giftCardPrice
-	rate = math.Trunc(rate*1e2+0.5) * 1e-2
-	fmt.Println(bitcoinPrice)
-	fmt.Println(giftCardPrice)
-	fmt.Println(rate)
+	db, err := sql.Open("postgres", "host=localhost port=5432 user=postgres password=1314 dbname=paxfulrate sslmode=disable")
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	var rateMinutes []float64
+	var rateHours []float64
+
+	for {
+		now := time.Now()
+		if now.Second() == 0 {
+			if now.Minute() == 0 {
+				if now.Hour() == 0 {
+					if len(rateHours) != 0 {
+						sum := 0.0
+						for _, v := range rateHours {
+							sum += v
+						}
+						rateDay := sum / float64(len(rateHours))
+
+						stmt, err := db.Prepare(`insert into "rateDay"("rateDay", rate) values ($1, $2)`)
+						if err != nil {
+							panic(err)
+						}
+						_, err = stmt.Exec(now.Format("2006-01-02"), fmt.Sprintf("%.2f", rateDay))
+						if err != nil {
+							panic(err)
+						}
+
+						rateHours = rateHours[0:0]
+					}
+				}
+				if len(rateMinutes) != 0 {
+					sum := 0.0
+					for _, v := range rateMinutes {
+						sum += v
+					}
+					rateHour := sum / float64(len(rateMinutes))
+
+					stmt, err := db.Prepare(`insert into "rateHour"("rateHour", rate) values ($1, $2)`)
+					if err != nil {
+						panic(err)
+					}
+					_, err = stmt.Exec(now.Format("2006-01-02 15:00:00"), fmt.Sprintf("%.2f", rateHour))
+					if err != nil {
+						panic(err)
+					}
+
+					rateHours = append(rateHours, rateHour)
+
+					rateMinutes = rateMinutes[0:0]
+				}
+			}
+			bitcoinPrice := getBitcoinCNY()
+			giftCardPrice := getGiftCardUSD()
+			rate := bitcoinPrice / giftCardPrice
+			stmt, err := db.Prepare(`insert into "rateMinute"("rateMinute", rate, "giftcardPrice", "bitcoinPrice") values ($1, $2, $3, $4)`)
+			if err != nil {
+				panic(err)
+			}
+			_, err = stmt.Exec(now.Format("2006-01-02 15:04:00"), fmt.Sprintf("%.2f", rate), fmt.Sprintf("%.2f", giftCardPrice), fmt.Sprintf("%.2f", bitcoinPrice))
+			if err != nil {
+				panic(err)
+			}
+
+			rateMinutes = append(rateMinutes, rate)
+		}
+		time.Sleep(time.Second * 1)
+	}
 }
 
 func main() {
-	calculatePaxfulrate()
+	go calculatePaxfulrate()
+
+	for {
+		time.Sleep(time.Hour * 1)
+	}
 }
