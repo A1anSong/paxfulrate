@@ -299,6 +299,7 @@ func checkErr(err error) {
 func main() {
 	go calculatePaxfulrate()
 
+	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 
 	router.GET("/rateminutes", rateMinutes)
