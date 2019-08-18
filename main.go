@@ -48,7 +48,7 @@ func getBitcoinCNY() float64 {
 		strings.NewReader(values.Encode()),
 	)
 	if err != nil {
-		panic(err)
+		return 0
 	}
 
 	req.Header.Set("Accept", "application/json")
@@ -57,7 +57,7 @@ func getBitcoinCNY() float64 {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		panic(err)
+		return 0
 	}
 	defer resp.Body.Close()
 
@@ -99,7 +99,7 @@ func getGiftCardUSD() float64 {
 		strings.NewReader(values.Encode()),
 	)
 	if err != nil {
-		panic(err)
+		return 0
 	}
 
 	req.Header.Set("Accept", "application/json")
@@ -108,7 +108,7 @@ func getGiftCardUSD() float64 {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		panic(err)
+		return 0
 	}
 	defer resp.Body.Close()
 
@@ -141,49 +141,54 @@ func calculatePaxfulrate() {
 		if now.Second() == 0 {
 			if now.Minute() == 0 {
 				if now.Hour() == 0 {
+					rateDay := 0.0
 					if len(rateHours) != 0 {
 						sum := 0.0
 						for _, v := range rateHours {
 							sum += v
 						}
-						rateDay := sum / float64(len(rateHours))
-
-						stmt, err := db.Prepare(`insert into "rateDay"("rateDay", rate) values ($1, $2)`)
-						if err != nil {
-							panic(err)
-						}
-						_, err = stmt.Exec(now.Format("2006-01-02"), fmt.Sprintf("%.2f", rateDay))
-						if err != nil {
-							panic(err)
-						}
-
-						rateHours = rateHours[0:0]
+						rateDay = sum / float64(len(rateHours))
 					}
+					stmt, err := db.Prepare(`insert into "rateDay"("rateDay", rate) values ($1, $2)`)
+					if err != nil {
+						panic(err)
+					}
+					_, err = stmt.Exec(now.Format("2006-01-02"), fmt.Sprintf("%.2f", rateDay))
+					if err != nil {
+						panic(err)
+					}
+
+					rateHours = rateHours[0:0]
 				}
+				rateHour := 0.0
 				if len(rateMinutes) != 0 {
 					sum := 0.0
 					for _, v := range rateMinutes {
 						sum += v
 					}
-					rateHour := sum / float64(len(rateMinutes))
-
-					stmt, err := db.Prepare(`insert into "rateHour"("rateHour", rate) values ($1, $2)`)
-					if err != nil {
-						panic(err)
-					}
-					_, err = stmt.Exec(now.Format("2006-01-02 15:00:00"), fmt.Sprintf("%.2f", rateHour))
-					if err != nil {
-						panic(err)
-					}
-
-					rateHours = append(rateHours, rateHour)
-
-					rateMinutes = rateMinutes[0:0]
+					rateHour = sum / float64(len(rateMinutes))
 				}
+				stmt, err := db.Prepare(`insert into "rateHour"("rateHour", rate) values ($1, $2)`)
+				if err != nil {
+					panic(err)
+				}
+				_, err = stmt.Exec(now.Format("2006-01-02 15:00:00"), fmt.Sprintf("%.2f", rateHour))
+				if err != nil {
+					panic(err)
+				}
+
+				if rateHour != 0 {
+					rateHours = append(rateHours, rateHour)
+				}
+
+				rateMinutes = rateMinutes[0:0]
 			}
 			bitcoinPrice := getBitcoinCNY()
 			giftCardPrice := getGiftCardUSD()
-			rate := bitcoinPrice / giftCardPrice
+			rate := 0.0
+			if bitcoinPrice != 0 && giftCardPrice != 0 {
+				rate = bitcoinPrice / giftCardPrice
+			}
 			stmt, err := db.Prepare(`insert into "rateMinute"("rateMinute", rate, "giftcardPrice", "bitcoinPrice") values ($1, $2, $3, $4)`)
 			if err != nil {
 				panic(err)
@@ -193,7 +198,9 @@ func calculatePaxfulrate() {
 				panic(err)
 			}
 
-			rateMinutes = append(rateMinutes, rate)
+			if rate != 0 {
+				rateMinutes = append(rateMinutes, rate)
+			}
 		}
 		time.Sleep(time.Second * 1)
 	}
